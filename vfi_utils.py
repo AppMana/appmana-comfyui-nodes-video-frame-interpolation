@@ -1,4 +1,5 @@
 import gc
+import logging
 import typing
 
 import einops
@@ -11,6 +12,8 @@ from comfy.model_downloader import get_or_download, add_known_models
 from comfy.model_downloader_types import UrlFile
 from comfy.model_management import soft_empty_cache, get_torch_device
 
+logger = logging.getLogger(__name__)
+
 VFI_MODELS_FOLDER_NAME: typing.Final[str] = "vfi_models"
 _base_model_urls = [
     "https://github.com/styler00dollar/VSGAN-tensorrt-docker/releases/download/models/",
@@ -21,15 +24,19 @@ _base_model_urls = [
 
 def _get_github_release_file_urls(owner, repo, tag):
     url = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}"
-    response = requests.get(url)
+    res = []
+    try:
+        response = requests.get(url, timeout=2)
 
-    if response.status_code == 200:
-        release_data = response.json()
-        assets = release_data['assets']
+        if response.status_code == 200:
+            release_data = response.json()
+            assets = release_data['assets']
 
-        return [asset['browser_download_url'] for asset in assets]
-    else:
-        return []
+            res = [asset['browser_download_url'] for asset in assets]
+    except IOError as exc_info:
+        logger.error(f"failed to retrieve github release file urls for {owner}/{repo}:{tag}", exc_info=exc_info)
+        pass
+    return res
 
 
 def _initialize_known_models():
